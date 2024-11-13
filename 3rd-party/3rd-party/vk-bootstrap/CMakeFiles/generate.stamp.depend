@@ -1,0 +1,6 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-3.31/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-3.31/Modules/FindPackageMessage.cmake
+C:/Program Files/CMake/share/cmake-3.31/Modules/FindVulkan.cmake
+C:/Users/Vasyl/Desktop/vrender/3rd-party/vk-bootstrap/CMakeLists.txt
+C:/Users/Vasyl/Desktop/vrender/3rd-party/vk-bootstrap/gen/CurrentBuildVulkanVersion.cmake
