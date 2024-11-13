@@ -1,6 +1,0 @@
-C:/Users/Vasyl/Desktop/vrender/3rd-party/CMakeFiles/MyVulkanApp.dir
-C:/Users/Vasyl/Desktop/vrender/3rd-party/CMakeFiles/imgui.dir
-C:/Users/Vasyl/Desktop/vrender/3rd-party/CMakeFiles/ALL_BUILD.dir
-C:/Users/Vasyl/Desktop/vrender/3rd-party/CMakeFiles/ZERO_CHECK.dir
-C:/Users/Vasyl/Desktop/vrender/3rd-party/3rd-party/vk-bootstrap/CMakeFiles/vk-bootstrap.dir
-C:/Users/Vasyl/Desktop/vrender/3rd-party/3rd-party/vk-bootstrap/CMakeFiles/ALL_BUILD.dir
