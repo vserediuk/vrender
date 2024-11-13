@@ -29,6 +29,10 @@ namespace vkinit
 
     VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
 
+	VkPipelineLayoutCreateInfo pipeline_layout_create_info();
+
+	VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(VkShaderStageFlagBits stage, VkShaderModule shaderModule, const char* entry = "main");
+
 	VkRenderingInfo rendering_info(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment,
 		VkRenderingAttachmentInfo* depthAttachment);
 }

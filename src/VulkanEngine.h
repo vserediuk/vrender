@@ -77,7 +77,7 @@ struct FrameData {
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = false;	
 
 class VulkanEngine
 {
@@ -130,6 +130,10 @@ public:
 	VkExtent2D _drawExtent;
 	VkPipeline _gradientPipeline;
 	VkPipelineLayout _gradientPipelineLayout;
+	VkPipeline _trianglePipeline;
+	VkPipelineLayout _trianglePipelineLayout;
 	void run();
+	void draw_geometry(VkCommandBuffer cmd);
 	void init_imgui();
+	void init_triangle_pipeline();
 };
