@@ -33,6 +33,8 @@ namespace vkinit
 
 	VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(VkShaderStageFlagBits stage, VkShaderModule shaderModule, const char* entry = "main");
 
+	VkRenderingAttachmentInfo depth_attachment_info(VkImageView view, VkImageLayout layout);
+
 	VkRenderingInfo rendering_info(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment,
 		VkRenderingAttachmentInfo* depthAttachment);
 }

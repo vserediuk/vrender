@@ -14,6 +14,7 @@ file(GLOB SOURCES "src/*.cpp")
 
 # Указываем путь к ImGui
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party/imgui)
+set(STB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd-party/stb)
 
 # Создаем исполнимый файл с использованием найденных исходников
 add_executable(MyVulkanApp ${SOURCES} 
@@ -25,15 +26,17 @@ add_executable(MyVulkanApp ${SOURCES}
     ${IMGUI_DIR}/imgui_tables.cpp 
     ${IMGUI_DIR}/imgui_widgets.cpp)
 
-# Добавляем подкаталог vk-bootstrap
 add_subdirectory(3rd-party/vk-bootstrap)
+add_subdirectory(3rd-party/fastgltf)
+
 
 # Добавляем пути для заголовочных файлов
 target_include_directories(MyVulkanApp PRIVATE 
-    ${VULKAN_INCLUDE_DIR}             # Путь к заголовочным файлам Vulkan
-    ${CMAKE_CURRENT_SOURCE_DIR}       # Основной каталог проекта
-    ${IMGUI_DIR}                      # Путь к заголовочным файлам ImGui
-    ${IMGUI_DIR}/backends             # Путь к бэкендам ImGui
+    ${VULKAN_INCLUDE_DIR}            
+    ${CMAKE_CURRENT_SOURCE_DIR}       
+    ${IMGUI_DIR}                      
+    ${IMGUI_DIR}/backends  
+    ${STB_DIR}           
 )
 
 # Линковка с Vulkan, SDL2 и vk-bootstrap
@@ -42,4 +45,5 @@ target_link_libraries(MyVulkanApp
     ${VULKAN_LIB_DIR}/SDL2.lib  
     ${VULKAN_LIB_DIR}/SDL2main.lib 
     vk-bootstrap::vk-bootstrap
+    fastgltf
 )

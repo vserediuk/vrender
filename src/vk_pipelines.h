@@ -20,6 +20,10 @@ public:
 
     void clear();
 
+    void enable_blending_additive();
+
+    void enable_blending_alphablend();
+
     VkPipeline build_pipeline(VkDevice device);
     void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
     void set_input_topology(VkPrimitiveTopology topology);
@@ -29,5 +33,6 @@ public:
     void disable_blending();
     void set_color_attachment_format(VkFormat format);
     void set_depth_format(VkFormat format);
+    void enable_depthtest(bool depthWriteEnable, VkCompareOp op);
     void disable_depthtest();   
 };
