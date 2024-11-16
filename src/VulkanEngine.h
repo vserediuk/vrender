@@ -6,11 +6,33 @@
 #include "vk_images.h"
 #include "vk_loader.h"
 
-	constexpr unsigned int FRAME_OVERLAP = 2;
-	constexpr bool bUseValidationLayers = false;
+constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr bool bUseValidationLayers = false;
 
-	class VulkanEngine
-	{
+struct RenderObject {
+	uint32_t indexCount;
+	uint32_t firstIndex;
+	VkBuffer indexBuffer;
+
+	MaterialInstance* material;
+
+	glm::mat4 transform;
+	VkDeviceAddress vertexBufferAddress;
+};
+
+struct DrawContext {
+	std::vector<RenderObject> OpaqueSurfaces;
+};
+
+struct MeshNode : public Node {
+
+	std::shared_ptr<MeshAsset> mesh;
+
+	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+};
+
+class VulkanEngine
+{
 	private:
 		VkDescriptorSetLayout _singleImageDescriptorLayout;
 		AllocatedImage _whiteImage;
@@ -44,6 +66,8 @@
 		GPUDrawPushConstants push_constants;
 		GPUSceneData sceneData;
 	public:
+		DrawContext mainDrawContext;
+		std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
 		MaterialInstance defaultData;
 		GLTFMetallic_Roughness metalRoughMaterial;
 		VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
@@ -88,17 +112,13 @@
 		void init_imgui();
 		AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 		void destroy_buffer(const AllocatedBuffer& buffer);
-		void init_triangle_pipeline();
 		void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 		GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 		void init_default_data();
+		void update_scene();
 		VkFence _immFence;
 		VkCommandBuffer _immCommandBuffer;
 		VkCommandPool _immCommandPool;
 		VkPipelineLayout _meshPipelineLayout;
 		VkPipeline _meshPipeline;
-
-		GPUMeshBuffers rectangle;
-
-		void init_mesh_pipeline();
-	};
+};
