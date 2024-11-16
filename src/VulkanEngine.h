@@ -6,67 +6,6 @@
 #include "vk_images.h"
 #include "vk_loader.h"
 
-struct GPUSceneData {
-	glm::mat4 view;
-	glm::mat4 proj;
-	glm::mat4 viewproj;
-	glm::vec4 ambientColor;
-	glm::vec4 sunlightDirection; // w for sun power
-	glm::vec4 sunlightColor;
-};
-
-	struct ComputePushConstants {
-		glm::vec4 data1;
-		glm::vec4 data2;
-		glm::vec4 data3;
-		glm::vec4 data4;
-	};
-
-	struct ComputeEffect {
-		const char* name;
-
-		VkPipeline pipeline;
-		VkPipelineLayout layout;
-
-		ComputePushConstants data;
-	};
-
-	struct DeletionQueue
-	{
-		std::deque<std::function<void()>> deletors;
-
-		void push_function(std::function<void()>&& function) {
-			deletors.push_back(function);
-		}
-
-		void flush() {
-			// reverse iterate the deletion queue to execute all the functions
-			for (auto it = deletors.rbegin(); it != deletors.rend(); it++) {
-				(*it)(); //call functors
-			}
-
-			deletors.clear();
-		}
-	};
-
-	struct AllocatedImage {
-		VkImage image;
-		VkImageView imageView;
-		VmaAllocation allocation;
-		VkExtent3D imageExtent;
-		VkFormat imageFormat;
-	};
-
-	struct FrameData {
-
-		VkCommandPool _commandPool;
-		VkCommandBuffer _mainCommandBuffer;
-		VkSemaphore _swapchainSemaphore, _renderSemaphore;
-		VkFence _renderFence;
-		DeletionQueue _deletionQueue;
-		DescriptorAllocatorGrowable _frameDescriptors;
-	};
-
 	constexpr unsigned int FRAME_OVERLAP = 2;
 	constexpr bool bUseValidationLayers = false;
 
@@ -105,6 +44,8 @@ struct GPUSceneData {
 		GPUDrawPushConstants push_constants;
 		GPUSceneData sceneData;
 	public:
+		MaterialInstance defaultData;
+		GLTFMetallic_Roughness metalRoughMaterial;
 		VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 		AllocatedImage _drawImage;
 		AllocatedImage _depthImage;
