@@ -19,6 +19,9 @@ obj/
 *.userosscache       # Visual Studio cache
 *.sln.docstates      # Visual Studio solution file state
 .vsconfig            # Visual Studio configuration
+*.vcxproj            # Visual Studio project files
+*.vcxproj.filters    # Visual Studio project filter files
+*.sln                # Visual Studio solution files
 
 # Ignore Vulkan SDK files (if you have Vulkan SDK installed locally)
 vulkan_sdk/
