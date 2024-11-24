@@ -1,0 +1,57 @@
+# Ignore build directories
+build/
+bin/
+obj/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Ignore Visual Studio files
+.vscode/             # VS Code workspace files
+.idea/               # JetBrains IDE (if applicable)
+.vs/                 # Visual Studio settings and temporary files
+*.vcxproj.user       # User-specific Visual Studio project files
+*.suo                # Visual Studio user options
+*.user               # User-specific Visual Studio settings
+*.userosscache       # Visual Studio cache
+*.sln.docstates      # Visual Studio solution file state
+.vsconfig            # Visual Studio configuration
+*.vcxproj            # Visual Studio project files
+*.vcxproj.filters    # Visual Studio project filter files
+*.sln                # Visual Studio solution files
+
+# Ignore Vulkan SDK files (if you have Vulkan SDK installed locally)
+vulkan_sdk/
+
+# Ignore SDL-specific files
+sdl2-config.h
+
+# Ignore SPIR-V binaries
+*.spv
+
+# Ignore CMake and Makefile related files
+CMakeCache.txt
+CMakeFiles/
+Makefile
+CMakeLists.txt.user
+
+# Ignore compiled library files
+*.lib
+*.dll
+*.dylib
+
+# Ignore temporary files from text editors
+*~
+*.swp
+*.swo
+
+# Ignore gdb files
+gdb_history
+
+# Ignore other temporary files
+*.tmp
+*.bak
+*.swp
