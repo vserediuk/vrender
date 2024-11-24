@@ -23,7 +23,6 @@
 
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
-#include "fastgltf/glm_element_traits.hpp"
 
 #include "vk_descriptors.h"
 
@@ -33,7 +32,7 @@ enum class MaterialPass :uint8_t {
     Other
 };
 
-struct VulkanEngine;
+class VulkanEngine;
 
 struct DrawContext;
 
@@ -132,8 +131,6 @@ struct AllocatedImage {
 };
 
 struct FrameData {
-
-	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence _renderFence;
