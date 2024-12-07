@@ -624,11 +624,14 @@ void VulkanEngine::update_scene()
 
     loadedScenes["scene"]->Draw(scaleMatrix, mainDrawContext);
 
-
     auto end = std::chrono::system_clock::now();
 
     //convert to microseconds (integer), and then come back to miliseconds
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+
+    loadedScenes["scene"]->updateAnimation(0, elapsed.count());
+
     stats.scene_update_time = elapsed.count() / 1000.f;
 }
 
@@ -1132,20 +1135,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 
 void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
     glm::mat4 nodeMatrix = topMatrix * worldTransform;
-
-    //animation
-    if (skin > -1) {
-        //Skin skinData = skins[skin];
-        //size_t numJoints = skinData.joints.size();
-        //std::vector<glm::mat4> jointMatrices(numJoints);
-        //for (size_t i = 0; i < numJoints; i++) {
-            //jointMatrices[i] = getNodeMatrix(skinData.joints[i]) * skinData.inverseBindMatrices[i];
-            //jointMatrices[i] = inverseTransform * jointMatrices[i];   
-        //}
-
-        // update shader data
-        //skinData.ssbo.copyTo(jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
-    }
 
     for (auto& s : mesh->surfaces) {
         RenderObject def;

@@ -102,9 +102,33 @@ void LoadedGLTF::updateAnimation(uint32_t activeAnimation, float deltaTime)
             }
         }
     }
-    for (auto& node : nodes)
+    for (auto& node : topNodes)
     {
-        //updateJoints(node);
+        updateJoints(node);
+    }
+}
+
+void LoadedGLTF::updateJoints(std::shared_ptr<Node> node)
+{
+    if (node->skin > -1)
+    {
+        // Update the joint matrices
+        glm::mat4              inverseTransform = glm::inverse(node->localTransform);
+        Skin                   skin = skins[node->skin];
+        size_t                 numJoints = (uint32_t)skin.joints.size();
+        std::vector<glm::mat4> jointMatrices(numJoints);
+        for (size_t i = 0; i < numJoints; i++)
+        {
+            jointMatrices[i] = skin.joints[i]->localTransform * skin.inverseBindMatrices[i];
+            jointMatrices[i] = inverseTransform * jointMatrices[i];
+        }
+        // Update ssbo
+        memcpy(skin.ssbo.buffer, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+    }
+
+    for (auto& child : node->children)
+    {
+        updateJoints(child);
     }
 }
 
