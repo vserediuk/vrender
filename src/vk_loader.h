@@ -85,6 +85,8 @@ struct LoadedGLTF : public IRenderable {
 
     void updateAnimation(uint32_t activeAnimation, float deltaTime);
 
+    void updateJoints(std::shared_ptr<Node> node);
+
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
 private:
