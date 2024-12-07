@@ -16,10 +16,16 @@ struct Vertex {
 	vec3 normal;
 	float uv_y;
 	vec4 color;
+	ivec4 inJointIndices;
+	vec4 inJointWeights;
 }; 
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 
 	Vertex vertices[];
+};
+
+layout(std430, set = 1, binding = 0) readonly buffer JointMatrices {
+	mat4 jointMatrices[];
 };
 
 //push constants block
@@ -37,7 +43,14 @@ void main()
 
 	gl_Position =  sceneData.viewproj * PushConstants.render_matrix *position;
 
-	outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+	vec4 weights = v.inJointWeights / dot(v.inJointWeights, vec4(1.0));
+        mat4 skinMat = 
+        weights.x * jointMatrices[int(v.inJointIndices.x)] +
+        weights.y * jointMatrices[int(v.inJointIndices.y)] +
+        weights.z * jointMatrices[int(v.inJointIndices.z)] +
+        weights.w * jointMatrices[int(v.inJointIndices.w)];
+
+	outNormal = (PushConstants.render_matrix * skinMat * vec4(v.normal, 0.f)).xyz;
 	outColor = v.color.xyz * materialData.colorFactors.xyz;	
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;

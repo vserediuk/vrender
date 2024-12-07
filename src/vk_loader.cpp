@@ -1,8 +1,9 @@
 #include "vk_loader.h"
 #include "VulkanEngine.h"
 #include "vk_images.h"
-#include <variant>
+#include <optional>
 #include "fastgltf/glm_element_traits.hpp"
+#include <variant>
 #include <glm/gtc/quaternion.hpp>
 
 VkFilter extract_filter(fastgltf::Filter filter)
@@ -37,6 +38,76 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
     }
 }
 
+void LoadedGLTF::updateAnimation(uint32_t activeAnimation, float deltaTime)
+{
+    if (activeAnimation > static_cast<uint32_t>(animations.size()) - 1)
+    {
+        std::cout << "No animation with index " << activeAnimation << std::endl;
+        return;
+    }
+    Animation& animation = animations[activeAnimation];
+    animation.currentTime += deltaTime;
+    if (animation.currentTime > animation.end)
+    {
+        animation.currentTime -= animation.end;
+    }
+
+    for (auto& channel : animation.channels)
+    {
+        AnimationSampler& sampler = animation.samplers[channel.samplerIndex];
+        for (size_t i = 0; i < sampler.inputs.size() - 1; i++)
+        {
+            if (sampler.interpolation != fastgltf::AnimationInterpolation::Linear)
+            {
+                std::cout << "This sample only supports linear interpolations\n";
+                continue;
+            }
+
+            // Get the input keyframe values for the current time stamp
+            if ((animation.currentTime >= sampler.inputs[i]) && (animation.currentTime <= sampler.inputs[i + 1]))
+            {
+                float a = (animation.currentTime - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
+                if (channel.path == fastgltf::AnimationPath::Translation)
+                {
+                    glm::vec3 interpolatedTranslation = glm::mix(
+                        glm::vec3(sampler.outputsVec4[i]), // Convert vec4 to vec3 (x, y, z)
+                        glm::vec3(sampler.outputsVec4[i + 1]),
+                        a
+                    );
+
+                    // Apply the translation to the transformation matrix using fastgltf::math::translate
+                    channel.node->localTransform = glm::translate(glm::mat4(1.0f), interpolatedTranslation);
+                }
+                if (channel.path == fastgltf::AnimationPath::Rotation)
+                {
+                    glm::quat q1(sampler.outputsVec4[i].x, sampler.outputsVec4[i].y, sampler.outputsVec4[i].z, sampler.outputsVec4[i].w);
+                    glm::quat q2(sampler.outputsVec4[i + 1].x, sampler.outputsVec4[i + 1].y, sampler.outputsVec4[i + 1].z, sampler.outputsVec4[i + 1].w);
+
+                    // Perform spherical linear interpolation (SLERP) between q1 and q2
+                    glm::quat interpolatedQuat = glm::normalize(glm::slerp(q1, q2, a));
+
+                    // Convert the quaternion to a rotation matrix and apply it to localTransform
+                    channel.node->localTransform = glm::mat4_cast(interpolatedQuat);
+                }
+                if (channel.path == fastgltf::AnimationPath::Scale)
+                {
+                    glm::vec3 interpolatedScale = glm::mix(
+                        glm::vec3(sampler.outputsVec4[i]),
+                        glm::vec3(sampler.outputsVec4[i + 1]),
+                        a
+                    );
+
+                    channel.node->localTransform = glm::scale(glm::mat4(1.0f), interpolatedScale);
+                }
+            }
+        }
+    }
+    for (auto& node : nodes)
+    {
+        //updateJoints(node);
+    }
+}
+
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath)
 {
     std::cout << "Loading GLTF: " << filePath.data() << '\n';
@@ -52,7 +123,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
     fastgltf::Parser parser(supportedExtensions);
 
-    constexpr auto gltfOptions = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble | fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers 
+    constexpr auto gltfOptions = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble | fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers
         | fastgltf::Options::LoadExternalImages;
 
     auto result = fastgltf::GltfDataBuffer::FromPath(filePath);
@@ -262,6 +333,27 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                     });
             }
 
+            // load skin animation
+            auto joints = p.findAttribute("JOINTS_0");
+            if (joints != p.attributes.end()) {
+                fastgltf::Accessor& jointsAccessor = gltf.accessors[(*joints).accessorIndex];
+
+                fastgltf::iterateAccessorWithIndex<glm::uvec4>(gltf, jointsAccessor,
+                    [&](glm::uvec4 jointIdx, size_t index) {
+                        vertices[initial_vtx + index].jointIndices = glm::ivec4(jointIdx); // Convert unsigned to signed if necessary
+                    });
+            }
+
+            auto weights = p.findAttribute("WEIGHTS_0");
+            if (weights != p.attributes.end()) {
+                fastgltf::Accessor& weightsAccessor = gltf.accessors[(*weights).accessorIndex];
+
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, weightsAccessor,
+                    [&](glm::vec4 weight, size_t index) {
+                        vertices[initial_vtx + index].jointWeights = weight;
+                    });
+            }
+
             if (p.materialIndex.has_value()) {
                 newSurface.material = materials[p.materialIndex.value()];
             }
@@ -349,8 +441,134 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         }
     }
 
+    scene->skins.resize(gltf.skins.size());
+
+    for (size_t i = 0; i < gltf.skins.size(); i++) {
+        auto& skin = gltf.skins[i];
+
+        if (skin.inverseBindMatrices.has_value()) {
+            const auto& accessor = gltf.accessors[skin.inverseBindMatrices.value()];
+
+            if (accessor.bufferViewIndex.has_value()) {
+                const auto& bufferView = gltf.bufferViews[accessor.bufferViewIndex.value()];
+                const auto& buffer = gltf.buffers[bufferView.bufferIndex];
+
+                // Resize the inverse bind matrices storage in the scene
+                scene->skins[i].inverseBindMatrices.resize(skin.inverseBindMatrices.value());
+
+                // Copy the data from the buffer into the inverseBindMatrices vector
+                auto data = std::get<fastgltf::sources::Array>(buffer.data);
+                void* dataPtr = &data.bytes[accessor.byteOffset + bufferView.byteOffset];
+
+                memcpy(scene->skins[i].inverseBindMatrices.data(), dataPtr, sizeof(glm::mat4)* scene->skins[i].inverseBindMatrices.size());
+
+                // Create a GPU buffer for the inverse bind matrices
+                scene->skins[i].ssbo = engine->create_buffer(
+                    sizeof(glm::mat4) * scene->skins[i].inverseBindMatrices.size(),
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VMA_MEMORY_USAGE_CPU_TO_GPU
+                );
+            }
+        }
+    }
+
+    scene->animations.resize(gltf.animations.size());
+
+    for (size_t i = 0; i < gltf.animations.size(); i++)
+    {
+        auto glTFAnimation = gltf.animations[i];
+        scene->animations[i].name = glTFAnimation.name;
+
+        // Samplers
+        scene->animations[i].samplers.resize(glTFAnimation.samplers.size());
+        for (size_t j = 0; j < glTFAnimation.samplers.size(); j++)
+        {
+            auto glTFSampler = glTFAnimation.samplers[j];
+            AnimationSampler& dstSampler = scene->animations[i].samplers[j];
+            dstSampler.interpolation = glTFSampler.interpolation;
+
+            // Read sampler keyframe input time values
+            {
+                const auto accessor = gltf.accessors[glTFSampler.inputAccessor];
+                const auto& bufferView = gltf.bufferViews[accessor.bufferViewIndex.value()];
+                const auto& buffer = gltf.buffers[bufferView.bufferIndex];
+                auto data = std::get<fastgltf::sources::Array>(buffer.data);
+                void* dataPtr = &data.bytes[accessor.byteOffset + bufferView.byteOffset];
+                const float* buf = static_cast<const float*>(dataPtr);
+                for (size_t index = 0; index < accessor.count; index++)
+                {
+                    dstSampler.inputs.push_back(buf[index]);
+                }
+                // Adjust animation's start and end times
+                for (auto input : scene->animations[i].samplers[j].inputs)
+                {
+                    if (input < scene->animations[i].start)
+                    {
+                        scene->animations[i].start = input;
+                    };
+                    if (input > scene->animations[i].end)
+                    {
+                        scene->animations[i].end = input;
+                    }
+                }
+            }
+
+            // Read sampler keyframe output translate/rotate/scale values
+            {
+                const fastgltf::Accessor& accessor = gltf.accessors[glTFSampler.inputAccessor];
+                const fastgltf::BufferView& bufferView = gltf.bufferViews[accessor.bufferViewIndex.value()];
+                const fastgltf::Buffer& buffer = gltf.buffers[bufferView.bufferIndex];
+                auto data = std::get<fastgltf::sources::Array>(buffer.data);
+                void* dataPtr = &data.bytes[accessor.byteOffset + bufferView.byteOffset];
+                switch (accessor.type)
+                {
+                case fastgltf::AccessorType::Vec3: {
+                    const glm::vec3* buf = static_cast<const glm::vec3*>(dataPtr);
+                    for (size_t index = 0; index < accessor.count; index++)
+                    {
+                        dstSampler.outputsVec4.push_back(glm::vec4(buf[index], 0.0f));
+                    }
+                    break;
+                }
+                case fastgltf::AccessorType::Vec4: {
+                    const glm::vec4* buf = static_cast<const glm::vec4*>(dataPtr);
+                    for (size_t index = 0; index < accessor.count; index++)
+                    {
+                        dstSampler.outputsVec4.push_back(buf[index]);
+                    }
+                    break;
+                }
+                case fastgltf::AccessorType::Scalar: {
+                    const float* buf = static_cast<const float*>(dataPtr);
+                    for (size_t index = 0; index < accessor.count; index++)
+                    {
+                        dstSampler.outputsVec4.push_back(glm::vec4(buf[index], 0.0f, 0.0f, 0.0f));
+                    }
+                    break;
+                }
+                default: {
+                    std::cout << "unknown type: " << std::endl;
+                    break;
+                }
+                }
+            }
+        }
+
+        // Channels
+        scene->animations[i].channels.resize(glTFAnimation.channels.size());
+        for (size_t j = 0; j < glTFAnimation.channels.size(); j++)
+        {
+            fastgltf::AnimationChannel glTFChannel = glTFAnimation.channels[j];
+            AnimationChannel& dstChannel = scene->animations[i].channels[j];
+            dstChannel.path = glTFChannel.path;
+            dstChannel.samplerIndex = glTFChannel.samplerIndex;
+            //dstChannel.node = &gltf.nodes[glTFChannel.nodeIndex.value()].meshIndex.value();
+        }
+    }
+
     return scene;
 }
+
 
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {

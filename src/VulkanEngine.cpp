@@ -273,7 +273,6 @@ void VulkanEngine::draw() {
 
 void VulkanEngine::run()
 {
-    init();
     bool bQuit = false;
     SDL_Event e;
     bool stop_rendering = false;
@@ -356,7 +355,6 @@ void VulkanEngine::run()
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         stats.frametime = elapsed.count() / 1000.f;
     }
-    cleanup();
 }
 
 void VulkanEngine::init_imgui()
@@ -619,7 +617,7 @@ void VulkanEngine::update_scene()
     sceneData.sunlightColor *= sunlightIntensity;
 
     // Sunlight direction (normalized for accuracy)
-    sceneData.sunlightDirection = glm::normalize(glm::vec4(0.f, 1.f, 0.5f, 0.f));
+    sceneData.sunlightDirection = glm::normalize(glm::vec4(0.f, 1.f, 0.5f, 1.f));
 
 
     glm::mat4 scaleMatrix = glm::scale(glm::mat4{ 1.f }, glm::vec3(5.f, 5.f, 5.f));
@@ -1134,6 +1132,20 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 
 void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
     glm::mat4 nodeMatrix = topMatrix * worldTransform;
+
+    //animation
+    if (skin > -1) {
+        //Skin skinData = skins[skin];
+        //size_t numJoints = skinData.joints.size();
+        //std::vector<glm::mat4> jointMatrices(numJoints);
+        //for (size_t i = 0; i < numJoints; i++) {
+            //jointMatrices[i] = getNodeMatrix(skinData.joints[i]) * skinData.inverseBindMatrices[i];
+            //jointMatrices[i] = inverseTransform * jointMatrices[i];   
+        //}
+
+        // update shader data
+        //skinData.ssbo.copyTo(jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+    }
 
     for (auto& s : mesh->surfaces) {
         RenderObject def;

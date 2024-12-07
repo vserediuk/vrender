@@ -61,6 +61,8 @@ struct Node : public IRenderable {
     glm::mat4 localTransform;
     glm::mat4 worldTransform;
 
+    int32_t             skin = -1;
+
     void refreshTransform(const glm::mat4& parentMatrix)
     {
         worldTransform = parentMatrix * localTransform;
@@ -78,6 +80,29 @@ struct Node : public IRenderable {
     }
 };
 
+struct AnimationSampler
+{
+    fastgltf::AnimationInterpolation          interpolation;
+    std::vector<float>     inputs;
+    std::vector<glm::vec4> outputsVec4;
+};
+
+struct AnimationChannel
+{
+    fastgltf::AnimationPath path;
+    Node* node;
+    uint32_t    samplerIndex;
+};
+
+struct Animation
+{
+    std::string                   name;
+    std::vector<AnimationSampler> samplers;
+    std::vector<AnimationChannel> channels;
+    float                         start = std::numeric_limits<float>::max();
+    float                         end = std::numeric_limits<float>::min();
+    float                         currentTime = 0.0f;
+};
 
 struct GPUSceneData {
 	glm::mat4 view;
@@ -144,13 +169,26 @@ struct AllocatedBuffer {
     VmaAllocationInfo info;
 };
 
+struct Skin
+{
+    std::string            name;
+    Node* skeletonRoot = nullptr;
+    std::vector<glm::mat4> inverseBindMatrices;
+    std::vector<Node*>    joints;
+    AllocatedBuffer           ssbo;
+    VkDescriptorSet        descriptorSet;
+};
+
 struct Vertex {
     glm::vec3 position;
     float uv_x;
     glm::vec3 normal;
     float uv_y;
     glm::vec4 color;
+    glm::ivec4 jointIndices;
+    glm::vec4 jointWeights;
 };
+
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers {

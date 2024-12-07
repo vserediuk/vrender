@@ -1,4 +1,4 @@
-    #pragma once
+#pragma once
 #include <optional>
 #include <string>
 #include "vk_types.h"
@@ -66,6 +66,7 @@ struct LoadedGLTF : public IRenderable {
     std::unordered_map<std::string, std::shared_ptr<Node>> nodes;
     std::unordered_map<std::string, AllocatedImage> images;
     std::unordered_map<std::string, std::shared_ptr<GLTFMaterial>> materials;
+    std::vector<Animation> animations;
 
     // nodes that dont have a parent, for iterating through the file in tree order
     std::vector<std::shared_ptr<Node>> topNodes;
@@ -74,11 +75,15 @@ struct LoadedGLTF : public IRenderable {
 
     DescriptorAllocatorGrowable descriptorPool;
 
+    std::vector<Skin> skins;
+
     AllocatedBuffer materialDataBuffer;
 
     VulkanEngine* creator;
 
     ~LoadedGLTF() { clearAll(); };
+
+    void updateAnimation(uint32_t activeAnimation, float deltaTime);
 
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
