@@ -1,3 +1,4 @@
+#include <vma/vk_mem_alloc.h>
 #include "vk_loader.h"
 #include "VulkanEngine.h"
 #include "vk_images.h"
@@ -5,6 +6,7 @@
 #include "fastgltf/glm_element_traits.hpp"
 #include <variant>
 #include <glm/gtc/quaternion.hpp>
+
 
 VkFilter extract_filter(fastgltf::Filter filter)
 {
@@ -38,7 +40,7 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
     }
 }
 
-void LoadedGLTF::updateAnimation(uint32_t activeAnimation, float deltaTime)
+void LoadedGLTF::updateAnimation(VulkanEngine* engine, uint32_t activeAnimation, float deltaTime)
 {
     if (activeAnimation > static_cast<uint32_t>(animations.size()) - 1)
     {
@@ -104,31 +106,31 @@ void LoadedGLTF::updateAnimation(uint32_t activeAnimation, float deltaTime)
     }
     for (auto& node : topNodes)
     {
-        updateJoints(node);
+        updateJoints(engine, node);
     }
 }
 
-void LoadedGLTF::updateJoints(std::shared_ptr<Node> node)
+void LoadedGLTF::updateJoints(VulkanEngine* engine, std::shared_ptr<Node> node)
 {
     if (node->skin > -1)
     {
         // Update the joint matrices
         glm::mat4              inverseTransform = glm::inverse(node->localTransform);
         Skin                   skin = skins[node->skin];
-        size_t                 numJoints = (uint32_t)skin.joints.size();
+        size_t                 numJoints = skin.joints.size();
         std::vector<glm::mat4> jointMatrices(numJoints);
-        for (size_t i = 0; i < numJoints; i++)
+        for (size_t i = 0; i < std::min(numJoints, skin.inverseBindMatrices.size()); i++)
         {
             jointMatrices[i] = skin.joints[i]->localTransform * skin.inverseBindMatrices[i];
             jointMatrices[i] = inverseTransform * jointMatrices[i];
         }
         // Update ssbo
-        memcpy(skin.ssbo.buffer, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+        engine->updateSkinSSBO(node->skin, jointMatrices);
     }
 
     for (auto& child : node->children)
     {
-        updateJoints(child);
+        updateJoints(engine, child);
     }
 }
 
@@ -444,6 +446,10 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                 newNode->localTransform = translationMatrix * rotationMatrix * scaleMatrix;
             } },
             node.transform);
+
+        if (node.skinIndex.has_value()) {
+            newNode->skin = node.skinIndex.value();
+        }
     }
 
     // run loop again to setup transform hierarchy
@@ -469,6 +475,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
     for (size_t i = 0; i < gltf.skins.size(); i++) {
         auto& skin = gltf.skins[i];
+
+        scene->skins[i].name = skin.name;
+
+        // Find the root node of the skeleton
+        //scene->skins[i].skeletonRoot = nodes[skin.skeleton.value()].get();WWW
+
+        for (int jointIndex : skin.joints) {
+            if (jointIndex >= 0 && jointIndex < nodes.size()) {
+                scene->skins[i].joints.push_back(nodes[jointIndex].get());
+            }
+        }
+
 
         if (skin.inverseBindMatrices.has_value()) {
             const auto& accessor = gltf.accessors[skin.inverseBindMatrices.value()];
@@ -586,7 +604,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             AnimationChannel& dstChannel = scene->animations[i].channels[j];
             dstChannel.path = glTFChannel.path;
             dstChannel.samplerIndex = glTFChannel.samplerIndex;
-            //dstChannel.node = &gltf.nodes[glTFChannel.nodeIndex.value()].meshIndex.value();
+            dstChannel.node = nodes[glTFChannel.nodeIndex.value()].get();
         }
     }
 
@@ -619,10 +637,10 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
     materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
     VkDescriptorSetLayout layouts[] = { engine->_gpuSceneDataDescriptorLayout,
-        materialLayout };
+        materialLayout, engine->_skinDescriptorLayout };
 
     VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
-    mesh_layout_info.setLayoutCount = 2;
+    mesh_layout_info.setLayoutCount = 3;
     mesh_layout_info.pSetLayouts = layouts;
     mesh_layout_info.pPushConstantRanges = &matrixRange;
     mesh_layout_info.pushConstantRangeCount = 1;

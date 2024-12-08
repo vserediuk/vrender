@@ -24,7 +24,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer{
 	Vertex vertices[];
 };
 
-layout(std430, set = 1, binding = 0) readonly buffer JointMatrices {
+layout(std430, set = 2, binding = 0) readonly buffer JointMatrices {
 	mat4 jointMatrices[];
 };
 
@@ -43,14 +43,14 @@ void main()
 
 	gl_Position =  sceneData.viewproj * PushConstants.render_matrix *position;
 
-	vec4 weights = v.inJointWeights / dot(v.inJointWeights, vec4(1.0));
-        mat4 skinMat = 
-        weights.x * jointMatrices[int(v.inJointIndices.x)] +
-        weights.y * jointMatrices[int(v.inJointIndices.y)] +
-        weights.z * jointMatrices[int(v.inJointIndices.z)] +
-        weights.w * jointMatrices[int(v.inJointIndices.w)];
+	mat4 skinMat = 
+		v.inJointWeights.x * jointMatrices[int(v.inJointIndices.x)] +
+		v.inJointWeights.y * jointMatrices[int(v.inJointIndices.y)] +
+		v.inJointWeights.z * jointMatrices[int(v.inJointIndices.z)] +
+		v.inJointWeights.w * jointMatrices[int(v.inJointIndices.w)];
 
-	outNormal = (PushConstants.render_matrix * skinMat * vec4(v.normal, 0.f)).xyz;
+	mat4 normalMatrix = transpose(inverse(PushConstants.render_matrix * skinMat));
+	outNormal = (normalMatrix * vec4(v.normal, 0.0)).xyz;
 	outColor = v.color.xyz * materialData.colorFactors.xyz;	
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;

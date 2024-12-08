@@ -1,6 +1,6 @@
 #include "VulkanEngine.h"
 #define VMA_IMPLEMENTATION
-#include <vma/vk_mem_alloc.h>
+#include "vma/vk_mem_alloc.h"
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
     std::array<glm::vec3, 8> corners{
@@ -154,6 +154,16 @@ void VulkanEngine::init()
     mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
 
     _isInitialized = true;
+}
+
+void VulkanEngine::updateSkinSSBO(int skinIndex, const std::vector<glm::mat4>& jointMatrices)
+{
+    if (skinIndex < 0 || skinIndex >= loadedScenes["scene"]->skins.size())
+        return;
+
+    const Skin& skin = loadedScenes["scene"]->skins[skinIndex];
+
+    memcpy(skin.ssbo.allocation->GetMappedData(), jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
 }
 
 void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
@@ -580,6 +590,10 @@ void VulkanEngine::init_default_data() {
 
     loadedScenes["scene"] = *sceneFile;
 
+    for (auto& skin : loadedScenes["scene"]->skins) {
+        skin.descriptorSet = _globalDescriptorAllocator.allocate(_device, _skinDescriptorLayout);
+    }
+
     _mainDeletionQueue.push_function([&]() {
         destroy_buffer(materialConstants);
         vkDestroySampler(_device, _defaultSamplerNearest, nullptr);
@@ -629,8 +643,7 @@ void VulkanEngine::update_scene()
     //convert to microseconds (integer), and then come back to miliseconds
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-
-    loadedScenes["scene"]->updateAnimation(0, elapsed.count());
+    loadedScenes["scene"]->updateAnimation(this, 0, elapsed.count() / 10000.0f);
 
     stats.scene_update_time = elapsed.count() / 1000.f;
 }
@@ -875,10 +888,10 @@ void VulkanEngine::init_sync_structures()
 void VulkanEngine::init_descriptors() {
     for (int i = 0; i < FRAME_OVERLAP; i++) {
         std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 },
         };
 
         _frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
@@ -906,10 +919,18 @@ void VulkanEngine::init_descriptors() {
     builder.clear();
     builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     _singleImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+
+    builder.clear();
+    builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    _skinDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT);
+
+
     _mainDeletionQueue.push_function([&]() {
         vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
         vkDestroyDescriptorSetLayout(_device, _gpuSceneDataDescriptorLayout, nullptr);
         vkDestroyDescriptorSetLayout(_device, _singleImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(_device, _skinDescriptorLayout, nullptr);
         });
 }
 
@@ -1061,9 +1082,8 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     auto draw = [&](const RenderObject& r) {
         if (r.material != lastMaterial) {
             lastMaterial = r.material;
-            //rebind pipeline and descriptors if the material changed
+            // Rebind pipeline and descriptors if the material changed
             if (r.material->pipeline != lastPipeline) {
-
                 lastPipeline = r.material->pipeline;
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->pipeline);
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 0, 1,
@@ -1088,26 +1108,42 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
                 vkCmdSetScissor(cmd, 0, 1, &scissor);
             }
 
+            // Bind the material-specific descriptor set
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 1, 1,
                 &r.material->materialSet, 0, nullptr);
         }
-        //rebind index buffer if needed
+
+        // Always update the skin descriptor (for animation)
+        auto skin = loadedScenes["scene"]->skins[r.skinIndex];
+
+        writer.clear();
+        writer.write_buffer(0, skin.ssbo.buffer, sizeof(glm::mat4) * skin.joints.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        writer.update_set(_device, skin.descriptorSet);
+
+        // Bind the updated skin descriptor set
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 2, 1, &skin.descriptorSet, 0, nullptr);
+
+        // Rebind the index buffer if needed
         if (r.indexBuffer != lastIndexBuffer) {
             lastIndexBuffer = r.indexBuffer;
             vkCmdBindIndexBuffer(cmd, r.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
         }
-        // calculate final mesh matrix
+
+        // Calculate the final mesh matrix and push it to the vertex shader
         GPUDrawPushConstants push_constants;
         push_constants.worldMatrix = r.transform;
         push_constants.vertexBuffer = r.vertexBufferAddress;
 
         vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
 
+        // Draw the indexed geometry
         vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
-        //stats
+
+        // Update draw call stats
         stats.drawcall_count++;
         stats.triangle_count += r.indexCount / 3;
         };
+
 
     for (int i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
         if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
@@ -1133,6 +1169,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     mainDrawContext.TransparentSurfaces.clear();
 }
 
+
 void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
     glm::mat4 nodeMatrix = topMatrix * worldTransform;
 
@@ -1142,6 +1179,7 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
         def.firstIndex = s.startIndex;
         def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
         def.material = &s.material->data;
+        def.skinIndex = skin;
         def.bounds = s.bounds;
         def.transform = nodeMatrix;
         def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
