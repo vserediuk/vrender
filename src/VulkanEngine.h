@@ -1,5 +1,4 @@
 #pragma once
-
 #include "vk_types.h"
 #include "vk_descriptors.h"
 #include "vk_initializers.h"
@@ -23,6 +22,7 @@ struct RenderObject {
     uint32_t indexCount;
     uint32_t firstIndex;
     VkBuffer indexBuffer;
+    int32_t  skinIndex = -1;
 
     MaterialInstance* material;
     Bounds bounds;
@@ -36,7 +36,6 @@ struct DrawContext {
 };
 
 struct MeshNode : public Node {
-    bool hasAnimation;
     std::shared_ptr<MeshAsset> mesh;
 
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
@@ -47,6 +46,7 @@ public:
     Camera mainCamera;
 
     void init();
+    void updateSkinSSBO(int skinIndex, const std::vector<glm::mat4>& jointMatrices);
     void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
     void resize_swapchain();
     void draw();
@@ -73,6 +73,7 @@ public:
     void destroy_image(const AllocatedImage& img);
 
     VkDescriptorSetLayout _singleImageDescriptorLayout;
+    VkDescriptorSetLayout _skinDescriptorLayout;
     VkSampler _defaultSamplerLinear;
     VkSampler _defaultSamplerNearest;
     AllocatedImage _whiteImage;

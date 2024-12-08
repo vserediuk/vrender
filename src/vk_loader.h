@@ -1,5 +1,4 @@
 #pragma once
-#include <optional>
 #include <string>
 #include "vk_types.h"
 
@@ -83,9 +82,9 @@ struct LoadedGLTF : public IRenderable {
 
     ~LoadedGLTF() { clearAll(); };
 
-    void updateAnimation(uint32_t activeAnimation, float deltaTime);
+    void updateAnimation(VulkanEngine* engine, uint32_t activeAnimation, float deltaTime);
 
-    void updateJoints(std::shared_ptr<Node> node);
+    void updateJoints(VulkanEngine* engine, std::shared_ptr<Node> node);
 
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
